@@ -1,0 +1,26 @@
+# Configuration file for the model and dataset
+
+DATASET_PATH: "datasets/Cropped.zip"
+DATASET_NAME: "Cropped"
+LEARNING_RATE: 0.0005
+NUM_EPOCHS: 500
+LOG_INTERVAL: 20
+
+# Early stopping configuration
+EARLY_STOPPER:
+  patience: 5
+  min_delta: 0
+
+# Dataset split percentages
+SPLIT_RATIOS: [0.8, 0.2]
+
+# Batch sizes for training and evaluation
+BATCH_SIZES:
+  train: 256
+  validation: 512
+
+# Model configuration
+MODEL:
+  type: "resnet"  # Can be "resnet" or "baseline"
+  resnet_version: 18  # Used only if resnet is selected
+  pretrained: True  # For loading pretrained weights (for ResNet)
