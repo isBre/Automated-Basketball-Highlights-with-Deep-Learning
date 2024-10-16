@@ -190,55 +190,6 @@ def validate(
     return loss_val, accuracy
 
 
-def get_predictions(
-        model: nn.Module, 
-        dataloader: DataLoader,
-        current_device: device,
-    ) -> Dict:
-    """
-    Evaluate a given model with a dataloader
-    Args:
-        model: the model that need to be evaluate
-        dataloader: the dataset
-    return:
-        a dictionary that contains:
-        - a list of confidences ([0,1] values)
-        - a list of predictions (0 or 1 values) 1 if confidence >.5 and 0 otherwise
-        - a list of true value (0 or 1 values)
-    """
-    confidence = []
-    true = []
-
-    # IMPORTANT: from now on, since we will introduce batch norm, we have to tell 
-    #PyTorch if we are training or evaluating our model
-    model = model.eval()
-
-    # Context-manager that disabled gradient calculation
-    with no_grad():
-
-        # Loop inside the data_loader
-        # The batch size is definited inside the data_loader
-        for idx_batch, (images, labels) in enumerate(dataloader):
-
-            # In order to speed up the process I want to use the current device
-            images, labels = images.to(current_device), labels.to(current_device)
-
-            # Get the output of the model
-            # I need to squeeze because of the dimension of the output (x, 1), I want just (x)
-            outputs = squeeze(model(images))
-
-            confidence = confidence + outputs.tolist()
-            true = true + labels.tolist()
-
-    predictions = [1 if x > 0.5 else 0 for x in confidence]
-
-    return {
-        "confidence" : confidence,
-        "predictions" : predictions,
-        "true" : true 
-    }
-
-
 def training_loop(
         num_epochs: int,
         optimizer: optim,
