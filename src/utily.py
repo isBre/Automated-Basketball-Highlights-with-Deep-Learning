@@ -57,7 +57,6 @@ def frame_to_hms(frame: int, fps: int) -> str:
 
 def fix_random(seed: int) -> None:
     """Fix all the possible sources of randomness.
-
     Args:
         seed: the seed to use. 
     """
