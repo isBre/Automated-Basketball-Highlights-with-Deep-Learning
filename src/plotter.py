@@ -2,7 +2,7 @@ import numpy as np
 from typing import List
 from torch import Tensor
 import matplotlib.pyplot as plt
-from utils import frame_to_hms
+from src.utils import frame_to_hms
 
 def imshow_tensor(tensor_image: Tensor) -> None:
     """
