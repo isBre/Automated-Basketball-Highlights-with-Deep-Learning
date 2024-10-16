@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Callable, Tuple, Dict
 from timeit import default_timer as timer
+from sklearn.metrics import f1_score, accuracy_score
 from torch import Tensor, optim, squeeze, float32, no_grad, device
 
 
@@ -30,22 +31,6 @@ class EarlyStopper:
         return False
 
 
-def get_correct_samples(
-        scores: Tensor, 
-        labels: Tensor,
-    ) -> int:
-    """Get the number of correctly classified examples.
-
-    Args:
-        scores: the probability distribution.
-        labels: the class labels.
-
-    Returns: :return: the number of correct samples
-    """
-    classes_predicted = (scores > 0.5).float()
-    return (classes_predicted == labels).sum().item()
-
-
 def train(
         model: nn.Module,
         train_loader: DataLoader,
@@ -68,109 +53,30 @@ def train(
 
     Returns:
         the Cross Entropy Loss value on the training data, 
-        the accuracy on the training data.
+        the accuracy on the training data,
+        the F1 score on the training data.
     """
-    # Corrected Labeled samples
-    correct = 0
-
     # Images in the batch
     samples_train = 0
 
     # Loss of the Training Set
     loss_train = 0
 
-    # Entire dimension of the Training Set
-    size_ds_train = len(train_loader.dataset)
+    # Lists to store true labels and predicted outputs for accuracy and F1 score calculation
+    all_labels = []
+    all_predictions = []
 
-    # Number of batches
-    num_batches = len(train_loader)
-
-    # IMPORTANT: from now on, since we will introduce batch norm, we have to tell PyTorch if we are training or evaluating our model
+    # Set the model to training mode
     model.train()
 
     # Loop inside the train_loader
-    # The batch size is definited inside the train_loader
     for idx_batch, (images, labels) in enumerate(train_loader):
 
-      # In order to speed up the process I want to use the current_device
-      images, labels = images.to(current_device), labels.to(current_device)
-
-      # Set the gradient of the available parameters to zero
-      optimizer.zero_grad()
-
-      # Get the output of the model
-      # I need to squeeze because of the dimension of the output (x, 1), I want just (x)
-      outputs = squeeze(model(images))
-
-      # Here the model calculate the loss comparing true values and obtained values
-      # Here i need to cast to float32 because: labels is long and outputs is float32
-      loss = criterion(outputs, labels.to(float32))
-
-      # Update the total loss adding the loss of this particular batch
-      loss_train += loss.item() * len(images)
-
-      # Update the number of analyzed images
-      samples_train += len(images)
-      
-      # Compute the gradient
-      loss.backward()
-
-      # Update parameters considering the loss.backward() values
-      optimizer.step()
-
-      # Update the number of correct predicted values adding the correct value of this batch
-      correct += get_correct_samples(outputs, labels)
-
-      # Update metrics
-      if log_interval > 0:
-          if idx_batch % log_interval == 0:
-              running_loss = loss_train / samples_train
-              global_step = idx_batch + (epoch * num_batches)
-
-    loss_train /= samples_train
-    accuracy_training = 100. * correct / samples_train
-    return loss_train, accuracy_training
-
-
-def validate(
-        model: nn.Module,
-        data_loader: DataLoader,
-        current_device: device,
-        criterion: Callable[[Tensor, Tensor], float],
-    ) -> Tuple[float, float]:
-    """Evaluate the model.
-
-    Args:
-        model: the model to evalaute.
-        data_loader: the data loader containing the validation or test data.
-        current_device: the device to use to evaluate the model.
-        criterion: the loss function.
-
-    Returns:
-        the loss value on the validation data 
-        the accuracy on the validation data
-    """
-    # Corrected Labeled samples
-    correct = 0
-
-    # Images in the batch
-    samples_val = 0
-
-    # Loss of the Valuation Set
-    loss_val = 0.
-
-    # IMPORTANT: from now on, since we will introduce batch norm, we have to tell PyTorch if we are training or evaluating our model
-    model = model.eval()
-
-    # Context-manager that disabled gradient calculation
-    with no_grad():
-
-      # Loop inside the data_loader
-      # The batch size is definited inside the data_loader
-      for idx_batch, (images, labels) in enumerate(data_loader):
-
-        # In order to speed up the process I want to use the current device
+        # Move data to the current device
         images, labels = images.to(current_device), labels.to(current_device)
+
+        # Set the gradient of the available parameters to zero
+        optimizer.zero_grad()
 
         # Get the output of the model
         # I need to squeeze because of the dimension of the output (x, 1), I want just (x)
@@ -180,14 +86,106 @@ def validate(
         # Here i need to cast to float32 because: labels is long and outputs is float32
         loss = criterion(outputs, labels.to(float32))
 
-        # Update metrics
-        loss_val += loss.item() * len(images)
-        samples_val += len(images)
-        correct += get_correct_samples(outputs, labels)
+        # Update the total loss adding the loss of this particular batch
+        loss_train += loss.item() * len(images)
 
+        # Update the number of analyzed images
+        samples_train += len(images)
+        
+        # Compute the gradient
+        loss.backward()
+
+        # Update parameters considering the loss.backward() values
+        optimizer.step()
+
+        # Convert model outputs to predictions (0 or 1 based on threshold)
+        predicted = (outputs > 0.5).float()
+
+        # Store predictions and labels for accuracy and F1 score calculation
+        all_predictions.extend(predicted.cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())
+
+    # Calculate average loss
+    loss_train /= samples_train
+    
+    # Calculate accuracy using sklearn
+    accuracy_training = accuracy_score(all_labels, all_predictions)
+
+    # Calculate F1 score using sklearn
+    f1_training = f1_score(all_labels, all_predictions, average='binary')  # Use 'binary' for binary classification
+
+    return loss_train, accuracy_training, f1_training
+
+
+def validate(
+        model: nn.Module,
+        data_loader: DataLoader,
+        current_device: device,
+        criterion: Callable[[Tensor, Tensor], float],
+    ) -> Tuple[float, float, float]:
+    """Evaluate the model.
+
+    Args:
+        model: the model to evaluate.
+        data_loader: the data loader containing the validation or test data.
+        current_device: the device to use to evaluate the model.
+        criterion: the loss function.
+
+    Returns:
+        the loss value on the validation data 
+        the accuracy on the validation data
+        the F1 score on the validation data
+    """
+    # Images in the batch
+    samples_val = 0
+
+    # Loss of the Validation Set
+    loss_val = 0.
+
+    # Lists to store true labels and predicted outputs for accuracy and F1 score calculation
+    all_labels = []
+    all_predictions = []
+
+    # Set the model to evaluation mode
+    model = model.eval()
+
+    # Context-manager that disables gradient calculation
+    with no_grad():
+
+        # Loop inside the data_loader
+        for idx_batch, (images, labels) in enumerate(data_loader):
+
+            # Move data to the current device
+            images, labels = images.to(current_device), labels.to(current_device)
+
+            # Get the output of the model
+            outputs = squeeze(model(images))
+
+            # Here the model calculate the loss comparing true values and obtained values
+            # Here i need to cast to float32 because: labels is long and outputs is float32
+            loss = criterion(outputs, labels.to(float32))
+
+            # Update loss metric
+            loss_val += loss.item() * len(images)
+            samples_val += len(images)
+
+            # Convert model outputs to predictions (0 or 1 based on threshold)
+            predicted = (outputs > 0.5).float()
+
+            # Store predictions and labels for accuracy and F1 score calculation
+            all_predictions.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    # Calculate average loss
     loss_val /= samples_val
-    accuracy = 100. * correct / samples_val
-    return loss_val, accuracy
+
+    # Calculate accuracy using sklearn
+    accuracy = accuracy_score(all_labels, all_predictions)
+
+    # Calculate F1 score
+    f1 = f1_score(all_labels, all_predictions, average='binary')  # Use 'binary' for binary classification
+
+    return loss_val, accuracy, f1
 
 
 def training_loop(
@@ -228,17 +226,13 @@ def training_loop(
     # Start the timer in order to obtain the time needed to entirely train the model
     loop_start = timer()
 
-    # Record the history of the train losses
+    # Record the history
     train_losses_values = []
-
-    # Record the history of the val losses
     val_losses_values = []
-
-    # Record the history of the train accuracies
     train_acc_values = []
-
-    # Record the history of the validation accuracies
     val_acc_values = []
+    train_f1_values = []
+    val_f1_values = []
 
     # For every epoch
     for epoch in range(1, num_epochs + 1):
@@ -247,7 +241,7 @@ def training_loop(
         time_start = timer()
 
         # Obtain Loss and Accuracy for the train step
-        loss_train, accuracy_train = train(
+        loss_train, accuracy_train, f1_train = train(
             model=model, 
             train_loader=loader_train, 
             current_device=current_device,
@@ -258,7 +252,7 @@ def training_loop(
         )
         
         # Obtain Loss and Accuracy from the validation step
-        loss_val, accuracy_val = validate(
+        loss_val, accuracy_val, f1_val = validate(
             model=model, 
             data_loader=loader_val, 
             current_device=current_device, 
@@ -278,6 +272,8 @@ def training_loop(
         val_losses_values.append(loss_val)
         train_acc_values.append(accuracy_train)
         val_acc_values.append(accuracy_val)
+        train_f1_values.append(f1_train)
+        val_f1_values.append(f1_val)
         
         # Stop the timer for the entire training
         loop_end = timer()
@@ -289,12 +285,11 @@ def training_loop(
         lr =  optimizer.param_groups[0]['lr']
         if verbose:            
             print(
-                f'Epoch: {epoch} '
-                f' Lr: {lr:.8f} '
-                f' Loss: Train = [{loss_train:.4f}] - Val = [{loss_val:.4f}] '
-                f' Accuracy: Train = [{accuracy_train:.2f}%] - Val = [{accuracy_val:.2f}%] '
-                f' Time one epoch (s): {(time_end - time_start):.4f} '
-                f' Total time (s): {(time_loop):.2f}'
+                f"Epoch: [{epoch}] | Lr: [{lr:.4f}] | "
+                f"Train Loss: [{loss_train:.4f}] | Val Loss: [{loss_val:.4f}] | "
+                f"Train Acc: [{accuracy_train:.4f}] | Val Acc: [{accuracy_val:.4f}] | "
+                f"Train F1: [{f1_train:.4f}] | Val F1: [{f1_val:.2f}] | "
+                f"Time/Epoch (s): {(time_end - time_start):.4f} | Total Time (s): {time_loop:.2f}"
             )
             
     return {
