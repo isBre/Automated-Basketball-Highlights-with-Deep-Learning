@@ -347,12 +347,12 @@ def training_loop(
 
         # Metrics Print
         if verbose:
-            print(f'Time for {epoch-1} epochs (s): {(time_loop):.3f}') 
+            print(f'Epoch {epoch} ended after (s): {(time_loop):.2f}') 
             
-        return {
-            'train_loss_values': train_losses_values,
-            'val_loss_values' : val_losses_values,
-            'train_acc_values': train_acc_values,
-            'val_acc_values': val_acc_values,
-            'time': time_loop
-        }
+    return {
+        'train_loss_values': train_losses_values,
+        'val_loss_values' : val_losses_values,
+        'train_acc_values': train_acc_values,
+        'val_acc_values': val_acc_values,
+        'time': time_loop
+    }
