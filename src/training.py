@@ -1,8 +1,9 @@
 import numpy as np
 import torch.nn as nn
-from typing import Callable, Tuple
 from torch.utils.data import DataLoader
-from torch import Tensor, device, optim, squeeze, float32, no_grad
+from typing import Callable, Tuple, Dict
+from timeit import default_timer as timer
+from torch import Tensor, optim, squeeze, float32, no_grad, device
 
 
 class EarlyStopper:
@@ -29,7 +30,10 @@ class EarlyStopper:
         return False
 
 
-def get_correct_samples(scores: Tensor, labels: Tensor) -> int:
+def get_correct_samples(
+        scores: Tensor, 
+        labels: Tensor,
+    ) -> int:
     """Get the number of correctly classified examples.
 
     Args:
@@ -45,18 +49,18 @@ def get_correct_samples(scores: Tensor, labels: Tensor) -> int:
 def train(
         model: nn.Module,
         train_loader: DataLoader,
-        device: device,
+        current_device: device,
         optimizer: optim,
         criterion: Callable[[Tensor, Tensor], float],
         log_interval: int,
-        epoch: int
+        epoch: int,
     ) -> Tuple[float, float]:
     """Train loop to train a neural network for one epoch.
 
     Args:
         model: the model to train.
         train_loader: the data loader containing the training data.
-        device: the device to use to train the model.        
+        current_device: the device to use to train the model.        
         optimizer: the optimizer to use to train the model.
         criterion: the loss to optimize.
         log_interval: the log interval.
@@ -88,8 +92,8 @@ def train(
     # The batch size is definited inside the train_loader
     for idx_batch, (images, labels) in enumerate(train_loader):
 
-      # In order to speed up the process I want to use the current device
-      images, labels = images.to(device), labels.to(device)
+      # In order to speed up the process I want to use the current_device
+      images, labels = images.to(current_device), labels.to(current_device)
 
       # Set the gradient of the available parameters to zero
       optimizer.zero_grad()
@@ -131,14 +135,15 @@ def train(
 def validate(
         model: nn.Module,
         data_loader: DataLoader,
-        device: device,
-        criterion: Callable[[Tensor, Tensor], float]) -> Tuple[float, float]:
+        current_device: device,
+        criterion: Callable[[Tensor, Tensor], float],
+    ) -> Tuple[float, float]:
     """Evaluate the model.
 
     Args:
         model: the model to evalaute.
         data_loader: the data loader containing the validation or test data.
-        device: the device to use to evaluate the model.
+        current_device: the device to use to evaluate the model.
         criterion: the loss function.
 
     Returns:
@@ -165,7 +170,7 @@ def validate(
       for idx_batch, (images, labels) in enumerate(data_loader):
 
         # In order to speed up the process I want to use the current device
-        images, labels = images.to(device), labels.to(device)
+        images, labels = images.to(current_device), labels.to(current_device)
 
         # Get the output of the model
         # I need to squeeze because of the dimension of the output (x, 1), I want just (x)
@@ -185,7 +190,11 @@ def validate(
     return loss_val, accuracy
 
 
-def get_predictions(model, dataloader):
+def get_predictions(
+        model: nn.Module, 
+        dataloader: DataLoader,
+        current_device: device,
+    ) -> Dict:
     """
     Evaluate a given model with a dataloader
     Args:
@@ -212,7 +221,7 @@ def get_predictions(model, dataloader):
         for idx_batch, (images, labels) in enumerate(dataloader):
 
             # In order to speed up the process I want to use the current device
-            images, labels = images.to(device), labels.to(device)
+            images, labels = images.to(current_device), labels.to(current_device)
 
             # Get the output of the model
             # I need to squeeze because of the dimension of the output (x, 1), I want just (x)
@@ -228,3 +237,122 @@ def get_predictions(model, dataloader):
         "predictions" : predictions,
         "true" : true 
     }
+
+
+def training_loop(
+        num_epochs: int,
+        optimizer: optim,
+        log_interval: int, 
+        model: nn.Module, 
+        loader_train: DataLoader, 
+        loader_val: DataLoader,
+        loss_func: nn.modules.loss,
+        current_device: device,
+        verbose: bool = True,
+        early_stopping: EarlyStopper = None
+    ) -> Dict:
+    """Executes the training loop.
+    
+        Args:
+            name_exp: the name for the experiment.
+            num_epochs: the number of epochs.
+            optimizer: the optimizer to use.
+            log_interval: intervall to print on tensorboard.
+            model: the mode to train.
+            loader_train: the data loader containing the training data.
+            loader_val: the data loader containing the validation data.
+            verbose: 
+
+        Returns:  
+            A dictionary with the statistics computed during the train:
+            the values for the train loss for each epoch
+            the values for the train accuracy for each epoch
+            the values for the validation accuracy for each epoch
+            the time of execution in seconds for the entire loop
+        """
+
+    # Represent the Loss Function
+    criterion = loss_func
+
+    # Start the timer in order to obtain the time needed to entirely train the model
+    loop_start = timer()
+
+    # Record the history of the train losses
+    train_losses_values = []
+
+    # Record the history of the val losses
+    val_losses_values = []
+
+    # Record the history of the train accuracies
+    train_acc_values = []
+
+    # Record the history of the validation accuracies
+    val_acc_values = []
+
+    # For every epoch
+    for epoch in range(1, num_epochs + 1):
+
+        # Start the timer in order to obtain the time needed to train in this epoch
+        time_start = timer()
+
+        # Obtain Loss and Accuracy for the train step
+        loss_train, accuracy_train = train(
+            model=model, 
+            train_loader=loader_train, 
+            current_device=current_device,
+            optimizer=optimizer, 
+            criterion=criterion, 
+            log_interval=log_interval,
+            epoch=epoch,
+        )
+        
+        # Obtain Loss and Accuracy from the validation step
+        loss_val, accuracy_val = validate(
+            model=model, 
+            data_loader=loader_val, 
+            current_device=current_device, 
+            criterion=criterion,
+        )
+
+        if early_stopping is not None:
+            if early_stopping.early_stop(loss_val):
+                print(f'--- Early Stopping ---')     
+                break
+
+        #Stop the timer for this step
+        time_end = timer()
+
+        # Update history
+        train_losses_values.append(loss_train)
+        val_losses_values.append(loss_val)
+        train_acc_values.append(accuracy_train)
+        val_acc_values.append(accuracy_val)
+        
+        # Metrics Print
+        lr =  optimizer.param_groups[0]['lr']
+        if verbose:            
+            print(
+                f'Epoch: {epoch} '
+                f' Lr: {lr:.8f} '
+                f' Loss: Train = [{loss_train:.4f}] - Val = [{loss_val:.4f}] '
+                f' Accuracy: Train = [{accuracy_train:.2f}%] - Val = [{accuracy_val:.2f}%] '
+                f' Time one epoch (s): {(time_end - time_start):.4f} '
+            )
+        
+        # Stop the timer for the entire training
+        loop_end = timer()
+
+        # Calculate total time
+        time_loop = loop_end - loop_start
+
+        # Metrics Print
+        if verbose:
+            print(f'Time for {epoch-1} epochs (s): {(time_loop):.3f}') 
+            
+        return {
+            'train_loss_values': train_losses_values,
+            'val_loss_values' : val_losses_values,
+            'train_acc_values': train_acc_values,
+            'val_acc_values': val_acc_values,
+            'time': time_loop
+        }
