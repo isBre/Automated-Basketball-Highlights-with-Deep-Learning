@@ -328,6 +328,12 @@ def training_loop(
         train_acc_values.append(accuracy_train)
         val_acc_values.append(accuracy_val)
         
+        # Stop the timer for the entire training
+        loop_end = timer()
+
+        # Calculate total time
+        time_loop = loop_end - loop_start
+
         # Metrics Print
         lr =  optimizer.param_groups[0]['lr']
         if verbose:            
@@ -337,17 +343,8 @@ def training_loop(
                 f' Loss: Train = [{loss_train:.4f}] - Val = [{loss_val:.4f}] '
                 f' Accuracy: Train = [{accuracy_train:.2f}%] - Val = [{accuracy_val:.2f}%] '
                 f' Time one epoch (s): {(time_end - time_start):.4f} '
+                f' Total time (s): {(time_loop):.2f}'
             )
-        
-        # Stop the timer for the entire training
-        loop_end = timer()
-
-        # Calculate total time
-        time_loop = loop_end - loop_start
-
-        # Metrics Print
-        if verbose:
-            print(f'Epoch {epoch} ended after (s): {(time_loop):.2f}') 
             
     return {
         'train_loss_values': train_losses_values,
