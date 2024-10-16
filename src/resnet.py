@@ -7,6 +7,7 @@ from typing import Union
 def generate_resnet(
         number = Union[18, 50],
         pretrained = False,
+        current_device: device = device("cpu"),
 ) -> ResNet:
     '''
         Generate a ResNet18 or ResNet50 model with a single parameter output
@@ -14,8 +15,8 @@ def generate_resnet(
 
         Args:
         number: int, specify either 18 for ResNet18 or 50 for ResNet50.
-        pretrained: bool, if True, use pretrained weights (ResNet18_Weights.DEFAULT or ResNet50_Weights.DEFAULT), 
-        otherwise use random initialization.
+        pretrained: bool, if True, use pretrained weights (ResNet18_Weights.DEFAULT or ResNet50_Weights.DEFAULT), otherwise use random initialization.
+        current_device: torch.device, the device to use (e.g., "cpu" or "cuda"). Default is "cpu".
         
         Returns:
         A ResNet model with the final layer modified for a single output (a probability between 0 and 1).
@@ -42,5 +43,5 @@ def generate_resnet(
         nn.Sigmoid()
     )
     
-    model = model.to(device)
+    model = model.to(current_device)
     return model
