@@ -350,9 +350,9 @@ def training_loop(
             print(f'Time for {epoch-1} epochs (s): {(time_loop):.3f}') 
             
         return {
-            'train_loss_values': train_losses_values,
-            'val_loss_values' : val_losses_values,
-            'train_acc_values': train_acc_values,
-            'val_acc_values': val_acc_values,
-            'time': time_loop
+            'train_loss_values': round(train_losses_values, 4),
+            'val_loss_values' : round(val_losses_values, 4),
+            'train_acc_values': round(train_acc_values, 4),
+            'val_acc_values': round(val_acc_values, 4),
+            'time': round(time_loop, 4),
         }
