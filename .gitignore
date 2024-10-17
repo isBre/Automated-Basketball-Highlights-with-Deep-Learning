@@ -1,4 +1,7 @@
 # Exclude everything in the models, datasets, and runs directories
-models/
+weights/
 datasets/
 runs/
+
+# Exclude Python cache files
+__pycache__/
