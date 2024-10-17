@@ -3,7 +3,6 @@ This dataset was created with the help of `YOLOv5`, previously trained to recogn
 The dataset consists of small frames and ~7000 game screenshots that are precisely labeled.
   * Image size: 128x128
   * Total images: 6863 (644 labeled as `Point`, 6219 as `No Point`)
-  * Split: train (70%), validation (15%), test (15%)
 """
 
 import yaml
@@ -14,15 +13,17 @@ from src.utils import fix_random
 from torchvision import transforms
 from torch.cuda import is_available
 from src.dataset import DatasetClass
-from src.resnet import generate_resnet
 from torch import device, tensor, save
 from src.plotter import display_history
-from src.baseline_model import BaselineModel
+from src.models.mobile_net import MobileNet
+from src.models.resnet import generate_resnet
+from src.models.baseline_model import BaselineModel
 from src.training import EarlyStopper, training_loop
 from src.evaluation import calculate_metrics, get_predictions
 
 
 def select_model(config, current_device):
+    # TODO move this somewhere else
     """Dynamically select and initialize the model based on the YAML configuration."""
     if config['MODEL']['type'] == 'resnet':
         model = generate_resnet(
@@ -32,6 +33,8 @@ def select_model(config, current_device):
         )
     elif config['MODEL']['type'] == 'baseline':
         model = BaselineModel().to(current_device)
+    elif config['MODEL']['type'] == 'mobilenet':
+        model = MobileNet().to(current_device)
     else:
         raise ValueError(f"Unknown model type: {config['MODEL']['type']}")
     return model
