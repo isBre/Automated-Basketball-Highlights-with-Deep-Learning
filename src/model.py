@@ -19,7 +19,7 @@ def basket_found(result):
     return not (len(result.pred[0]) == 0)
 
 
-def yolov5resnet50_pipeline(
+def pipeline(
       frame: np.ndarray,
       transform: transforms,
       object_detection_model,
