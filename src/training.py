@@ -288,7 +288,7 @@ def training_loop(
                 f"Epoch: [{epoch}] | Lr: [{lr:.4f}] | "
                 f"Train Loss: [{loss_train:.4f}] | Val Loss: [{loss_val:.4f}] | "
                 f"Train Acc: [{accuracy_train:.4f}] | Val Acc: [{accuracy_val:.4f}] | "
-                f"Train F1: [{f1_train:.4f}] | Val F1: [{f1_val:.2f}] | "
+                f"Train F1: [{f1_train:.4f}] | Val F1: [{f1_val:.4f}] | "
                 f"Time/Epoch (s): {(time_end - time_start):.4f} | Total Time (s): {time_loop:.2f}"
             )
             
