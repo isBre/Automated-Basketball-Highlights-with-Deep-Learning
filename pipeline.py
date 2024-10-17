@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from inference import pipeline
 from torchvision import transforms
 from torch.cuda import is_available
-from src.resnet import generate_resnet
+from src.models.resnet import generate_resnet
 from torch import device, load, no_grad
 
 VIDEO_PATH = 'datasets/altamura.mp4'
