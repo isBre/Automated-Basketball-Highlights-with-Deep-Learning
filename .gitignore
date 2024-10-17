@@ -1,0 +1,4 @@
+# Exclude everything in the models, datasets, and runs directories
+models/
+datasets/
+runs/
