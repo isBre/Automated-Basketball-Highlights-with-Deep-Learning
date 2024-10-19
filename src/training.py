@@ -285,7 +285,7 @@ def training_loop(
         lr =  optimizer.param_groups[0]['lr']
         if verbose:            
             print(
-                f"Epoch: [{epoch}] | Lr: [{lr:.4f}] | "
+                f"Epoch: [{epoch}] | Lr: [{lr:.1e}] | "
                 f"Train Loss: [{loss_train:.4f}] | Val Loss: [{loss_val:.4f}] | "
                 f"Train Acc: [{accuracy_train:.4f}] | Val Acc: [{accuracy_val:.4f}] | "
                 f"Train F1: [{f1_train:.4f}] | Val F1: [{f1_val:.4f}] | "
