@@ -25,18 +25,18 @@ from src.evaluation import calculate_metrics, get_predictions
 def select_model(config, current_device):
     # TODO move this somewhere else
     """Dynamically select and initialize the model based on the YAML configuration."""
-    if config['MODEL']['type'] == 'resnet':
+    if config['model']['type'] == 'resnet':
         model = generate_resnet(
-            number=config['MODEL']['resnet_version'], 
-            pretrained=config['MODEL']['pretrained'], 
+            number=config['model']['resnet_version'], 
+            pretrained=config['model']['pretrained'], 
             current_device=current_device
         )
-    elif config['MODEL']['type'] == 'baseline':
+    elif config['model']['type'] == 'baseline':
         model = BaselineModel().to(current_device)
-    elif config['MODEL']['type'] == 'mobilenet':
+    elif config['model']['type'] == 'mobilenet':
         model = MobileNet().to(current_device)
     else:
-        raise ValueError(f"Unknown model type: {config['MODEL']['type']}")
+        raise ValueError(f"Unknown model type: {config['model']['type']}")
     return model
 
 
@@ -47,30 +47,29 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
     
     # Configuration variables
-    DATASET_PATH = config['DATASET_PATH']
-    DATASET_NAME = config['DATASET_NAME']
-    LEARNING_RATE = config['LEARNING_RATE']
-    NUM_EPOCHS = config['NUM_EPOCHS']
-    LOG_INTERVAL = config['LOG_INTERVAL']
-    BATCH_SIZES = config['BATCH_SIZES']
-    SPLIT_RATIOS = config['SPLIT_RATIOS']
-    EARLY_STOPPER_CONFIG = config['EARLY_STOPPER']
+    dataset_paths = config['dataset_paths']
+    learning_rate = config['learning_rate']
+    n_epochs = config['n_epochs']
+    log_interval = config['log_interval']
+    split_ratios = config['split_ratios']
+    batch_size = config['batch_size']
+    early_stopper_config = config['early_stopper']
     
     # Device selection: use GPU if available
-    CURRENT_DEVICE = device("cuda:0" if is_available() else "cpu")
-    print(f"Device Selected: {CURRENT_DEVICE}")
+    current_device = device("cuda:0" if is_available() else "cpu")
+    print(f"Device Selected: {current_device}")
 
     # Fix random seed for reproducibility
     fix_random(42)
 
     # Model selection based on config
-    MODEL = select_model(config, CURRENT_DEVICE)
-    OPTIMIZER = Adam(MODEL.parameters(), lr=LEARNING_RATE)
+    model = select_model(config, current_device)
+    optimizer = Adam(model.parameters(), lr=learning_rate)
 
     # Early stopping setup
-    EARLY_STOPPER = EarlyStopper(
-        patience=EARLY_STOPPER_CONFIG['patience'], 
-        min_delta=EARLY_STOPPER_CONFIG['min_delta'],
+    early_stopper = EarlyStopper(
+        patience=early_stopper_config['patience'], 
+        min_delta=early_stopper_config['min_delta'],
     )
 
     # Define data transformations
@@ -82,61 +81,53 @@ if __name__ == "__main__":
     ])
 
     dataset = DatasetClass(
-        extraction_path = DATASET_PATH, 
-        dataset_name = DATASET_NAME, 
-        train_batchsize = 256,
-        eval_batchsize = 512, 
-        split_dimension = SPLIT_RATIOS,
-        transform = data_transforms,
+        folder_paths=dataset_paths, 
+        batchsize=batch_size,
+        split_ratios=split_ratios,
+        transform=data_transforms,
     )
 
     # Display dataset distribution
+    targets = []
+    for d in dataset.full_dataset.datasets:
+        targets.extend(d.targets)
+
     print(
         f"Dataset Distribution | "
-        f"No Point: [{dataset.dataset['full'].targets.count(0)}] - "
-        f"Point: [{dataset.dataset['full'].targets.count(1)}]\n"
+        f"No Point: [{targets.count(0)}] - "
+        f"Point: [{targets.count(1)}]\n"
         f"Split Distribution | "
-        f"Train: [{len(dataset.dataset['train'])}] - "
-        f"Validation: [{len(dataset.dataset['val'])}]"
+        f"Train: [{len(dataset.datasets[0])}] - "  # Access the length of the first dataset (train)
+        f"Validation: [{len(dataset.datasets[1])}]"  # Access the length of the second dataset (validation)
     )
 
-    # Calculate class weights for imbalance handling
-    class_counts = [dataset.dataset['full'].targets.count(0), dataset.dataset['full'].targets.count(1)]
+    # Calculate class counts for imbalance handling
+    class_counts = [targets.count(0), targets.count(1)]
     total_count = sum(class_counts)
-    weights = tensor([total_count / class_counts[0], total_count / class_counts[1]]).to(CURRENT_DEVICE)
-    
+
+    # Compute class weights
+    weights = tensor([total_count / class_counts[0], total_count / class_counts[1]]).to(current_device)
+
     # Use weighted loss function
     loss_func = nn.BCEWithLogitsLoss(pos_weight=weights[1])
 
     # Training loop with early stopping
     history = training_loop(
-        num_epochs=NUM_EPOCHS,
-        optimizer=OPTIMIZER,
-        log_interval=LOG_INTERVAL,
-        model=MODEL,
-        loader_train=dataset.dataloader['train'],
-        loader_val=dataset.dataloader['val'],
+        num_epochs=n_epochs,
+        optimizer=optimizer,
+        log_interval=log_interval,
+        model=model,
+        loader_train=dataset.dataloaders[0],
+        loader_val=dataset.dataloaders[1],
         loss_func=loss_func,
-        current_device=CURRENT_DEVICE,
-        early_stopping=EARLY_STOPPER,
+        current_device=current_device,
+        early_stopping=early_stopper,
     )
 
     # Display training history
     display_history(history)
 
-    # Make predictions and calculate metrics on the test set
-    predictions, true_values, confidences = get_predictions(
-        model=MODEL,
-        data_loader=dataset.dataloader['val'],
-        current_device=CURRENT_DEVICE,
-    )
-    metrics = calculate_metrics(predictions, true_values, confidences)
-
-    # Print metrics
-    for key, value in metrics.items():
-        print(f"{key}: {value}")
-
     # Save the model with a unique filename including the F1 score
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    model_path = f'models/{MODEL.__class__.__name__}_{DATASET_NAME}_{metrics['f1_score']:.4f}_{timestamp}.pth'
-    save(MODEL.state_dict(), model_path)
+    timestamp = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
+    model_path = f'models/{model.__class__.__name__}_{timestamp}.pth'
+    save(model.state_dict(), model_path)
