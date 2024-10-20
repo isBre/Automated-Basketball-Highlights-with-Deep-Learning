@@ -129,5 +129,5 @@ if __name__ == "__main__":
 
     # Save the model with a unique filename including the F1 score
     timestamp = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-    model_path = f'models/{model.__class__.__name__}_{timestamp}.pth'
+    model_path = f'models/{model.__class__.__name__}_{timestamp}.pt'
     save(model.state_dict(), model_path)
