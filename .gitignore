@@ -3,7 +3,7 @@ weights/
 datasets/
 dataset/
 runs/
-Highlights-Automation/
+highlights/
 
 # Exclude Python cache files
 __pycache__/
