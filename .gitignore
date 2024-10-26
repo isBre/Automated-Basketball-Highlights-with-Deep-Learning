@@ -1,7 +1,10 @@
 # Exclude everything in the models, datasets, and runs directories
 weights/
 datasets/
+dataset/
 runs/
+Highlights-Automation/
 
 # Exclude Python cache files
 __pycache__/
+torch-env/
